@@ -22,4 +22,3 @@ miette = { workspace = true }
 percent-encoding = { workspace = true }
 
 [lib]
-doctest = false

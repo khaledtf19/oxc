@@ -52,4 +52,3 @@ default = []
 detect_code_removal = ["dep:oxc_semantic"]
 
 [lib]
-doctest = false
