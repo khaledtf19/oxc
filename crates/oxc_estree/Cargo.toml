@@ -30,3 +30,4 @@ default = []
 serialize = ["dep:oxc_data_structures", "dep:itoa", "dep:dragonbox_ecma"]
 
 [lib]
+doctest = false
