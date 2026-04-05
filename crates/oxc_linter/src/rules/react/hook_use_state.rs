@@ -37,7 +37,6 @@ struct HookUseStateConfig {
 #[derive(Debug, Default, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct HookUseState(HookUseStateConfig);
 
-// See <https://github.com/oxc-project/oxc/issues/6050> for documentation details.
 declare_oxc_lint!(
     /// ### What it does
     ///
@@ -166,14 +165,16 @@ impl Rule for HookUseState {
         ctx.diagnostic(follow_naming_convention(array_pattern.span()));
     }
 }
+
 fn get_expected_setter_vars(first: &CompactStr, second: &CompactStr) -> [CompactStr; 2] {
     let first_capitalized = capitalize(first);
 
-    let one = CompactStr::new(&format!("set{}{}", first_capitalized, second));
-    let two = CompactStr::new(&format!("set{}{}", first.to_uppercase(), second));
+    let one = CompactStr::new(&format!("set{first_capitalized}{second}"));
+    let two = CompactStr::new(&format!("set{}{second}", first.to_uppercase(),));
 
     [one, two]
 }
+
 fn capitalize(s: &str) -> CompactStr {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars();
@@ -185,9 +186,10 @@ fn capitalize(s: &str) -> CompactStr {
     out.push_str(chars.as_str());
     CompactStr::from(out)
 }
+
 fn split_leading_lowercase(s: &CompactStr) -> Option<(CompactStr, CompactStr)> {
     let s_str = s.as_str();
-    let split_at = s_str.chars().take_while(|c| c.is_ascii_lowercase()).map(char::len_utf8).sum();
+    let split_at = s_str.chars().take_while(char::is_ascii_lowercase).map(char::len_utf8).sum();
 
     if split_at == 0 {
         return None;
