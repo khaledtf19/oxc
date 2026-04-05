@@ -7,7 +7,7 @@ use crate::{
 use oxc_ast::{AstKind, ast::BindingPattern};
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_macros::declare_oxc_lint;
-use oxc_span::{CompactStr, GetSpan, Span};
+use oxc_span::{GetSpan, Span};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -119,20 +119,19 @@ impl Rule for HookUseState {
         }
 
         let Some(value_node) = &array_pattern.elements[0] else {
-            ctx.diagnostic(require_to_destruct(array_pattern.span()));
-            return;
-        };
-        let Some(setter_node) = &array_pattern.elements[1] else {
-            ctx.diagnostic(require_to_destruct(array_pattern.span()));
             return;
         };
 
-        if is_destructured_pattern(setter_node) {
+        let Some(setter_node) = &array_pattern.elements[1] else {
+            return;
+        };
+
+        if setter_node.is_destructuring_pattern() {
             ctx.diagnostic(require_to_destruct(array_pattern.span()));
             return;
         }
 
-        if is_destructured_pattern(value_node) {
+        if value_node.is_destructuring_pattern() {
             if self.0.allow_destructured_state {
                 return;
             }
@@ -141,24 +140,23 @@ impl Rule for HookUseState {
         }
 
         let Some(value_variable_name) = value_node.get_identifier_name() else {
-            ctx.diagnostic(require_to_destruct(array_pattern.span()));
             return;
         };
-        let value = value_variable_name.to_compact_str();
 
         let Some(setter_variable_name) = setter_node.get_identifier_name() else {
             ctx.diagnostic(require_to_destruct(array_pattern.span()));
             return;
         };
-        let setter = setter_variable_name.to_compact_str();
 
-        let Some((lowercase_prefix, suffix)) = split_leading_lowercase(&value) else {
+        let Some((lowercase_prefix, suffix)) =
+            split_leading_lowercase(value_variable_name.as_str())
+        else {
             ctx.diagnostic(follow_naming_convention(array_pattern.span()));
             return;
         };
-        let valid_setter_names = get_expected_setter_vars(&lowercase_prefix, &suffix);
+        let valid_setter_names = get_expected_setter_vars(lowercase_prefix, suffix);
 
-        if valid_setter_names.contains(&setter) {
+        if valid_setter_names.iter().any(|name| name.as_str() == setter_variable_name) {
             return;
         }
 
@@ -166,40 +164,34 @@ impl Rule for HookUseState {
     }
 }
 
-fn get_expected_setter_vars(first: &CompactStr, second: &CompactStr) -> [CompactStr; 2] {
-    let first_capitalized = capitalize(first);
-
-    let one = CompactStr::new(&format!("set{first_capitalized}{second}"));
-    let two = CompactStr::new(&format!("set{}{second}", first.to_uppercase(),));
+fn get_expected_setter_vars(first: &str, second: &str) -> [String; 2] {
+    let one = {
+        let mut s = String::with_capacity("set".len() + first.len() + second.len());
+        s.push_str("set");
+        first.chars().take(1).flat_map(char::to_uppercase).for_each(|c| s.push(c));
+        first.chars().skip(1).for_each(|c| s.push(c));
+        s.push_str(second);
+        s
+    };
+    let two = {
+        let mut s = String::with_capacity("set".len() + first.len() + second.len());
+        s.push_str("set");
+        first.chars().flat_map(char::to_uppercase).for_each(|c| s.push(c));
+        s.push_str(second);
+        s
+    };
 
     [one, two]
 }
 
-fn capitalize(s: &str) -> CompactStr {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    if let Some(c) = chars.next() {
-        for u in c.to_uppercase() {
-            out.push(u);
-        }
-    }
-    out.push_str(chars.as_str());
-    CompactStr::from(out)
-}
-
-fn split_leading_lowercase(s: &CompactStr) -> Option<(CompactStr, CompactStr)> {
-    let s_str = s.as_str();
-    let split_at = s_str.chars().take_while(char::is_ascii_lowercase).map(char::len_utf8).sum();
+fn split_leading_lowercase(s: &str) -> Option<(&str, &str)> {
+    let split_at = s.chars().take_while(char::is_ascii_lowercase).map(char::len_utf8).sum();
 
     if split_at == 0 {
         return None;
     }
 
-    Some((CompactStr::new(&s_str[..split_at]), CompactStr::new(&s_str[split_at..])))
-}
-
-fn is_destructured_pattern(pattern: &BindingPattern) -> bool {
-    matches!(pattern, BindingPattern::ObjectPattern(_) | BindingPattern::ArrayPattern(_))
+    Some((&s[..split_at], &s[split_at..]))
 }
 
 #[test]
