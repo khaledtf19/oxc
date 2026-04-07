@@ -141,7 +141,17 @@ impl CliRunner {
                     utils::print_and_flush(stderr, "No files found matching the given patterns.\n");
                     return CliRunResult::None;
                 }
-                utils::print_and_flush(stderr, "Expected at least one target file\n");
+                let message = if ignore_patterns.is_empty() {
+                    // The default ignore pattern is `.prettierignore`.
+                    "Expected at least one target file (all candidates were excluded by .prettierignore)\n".to_string()
+                } else {
+                    format!(
+                        "Expected at least one target file (all candidates were excluded by {})\n",
+                        ignore_patterns.join(", ")
+                    )
+                };
+
+                utils::print_and_flush(stderr, message.as_str());
                 return CliRunResult::NoFilesFound;
             }
             Err(err) => {
